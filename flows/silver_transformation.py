@@ -11,7 +11,11 @@ from prefect.logging import get_run_logger
 
 import pandas as pd
 
-from config import BUCKET_BRONZE, BUCKET_SILVER, get_minio_client
+# Gestion des imports pour fonctionner depuis flows/ ou depuis la racine
+try:
+    from .config import BUCKET_BRONZE, BUCKET_SILVER, get_minio_client
+except ImportError:
+    from config import BUCKET_BRONZE, BUCKET_SILVER, get_minio_client
 
 
 @task(name="read_from_bronze", retries=2)

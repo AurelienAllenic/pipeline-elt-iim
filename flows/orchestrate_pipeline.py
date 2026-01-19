@@ -1,14 +1,27 @@
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
 load_dotenv()
 os.environ["PREFECT_API_URL"] = os.getenv("PREFECT_API_URL")
 
 from prefect import flow
 from prefect.logging import get_run_logger
 
-from bronze_ingestion import bronze_ingestion_flow
-from silver_transformation import silver_ingestion_flow
-from gold_agregation import gold_ingestion_flow
+try:
+    from flows.bronze_ingestion import bronze_ingestion_flow
+    from flows.silver_transformation import silver_ingestion_flow
+    from flows.gold_agregation import gold_ingestion_flow
+except ImportError:
+    from .bronze_ingestion import bronze_ingestion_flow
+    from .silver_transformation import silver_ingestion_flow
+    from .gold_agregation import gold_ingestion_flow
 
 
 @flow(name="ELT Pipeline Orchestrator", log_prints=True)

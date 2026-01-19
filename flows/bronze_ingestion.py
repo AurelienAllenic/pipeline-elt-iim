@@ -8,7 +8,11 @@ from pathlib import Path
 
 from prefect import flow, task
 
-from config import BUCKET_BRONZE, BUCKET_SOURCES, get_minio_client
+# Gestion des imports pour fonctionner depuis flows/ ou depuis la racine
+try:
+    from .config import BUCKET_BRONZE, BUCKET_SOURCES, get_minio_client
+except ImportError:
+    from config import BUCKET_BRONZE, BUCKET_SOURCES, get_minio_client
 
 @task(name="upload_to_sources", retries=2)
 def upload_csv_to_souces(file_path: str, object_name: str) -> str:
