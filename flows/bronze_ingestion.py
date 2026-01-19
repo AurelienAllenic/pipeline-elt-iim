@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+os.environ["PREFECT_API_URL"] = os.getenv("PREFECT_API_URL")
+
 from io import BytesIO
 from pathlib import Path
 

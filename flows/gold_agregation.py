@@ -1,7 +1,13 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+os.environ["PREFECT_API_URL"] = os.getenv("PREFECT_API_URL")
+
 from io import BytesIO
 from pathlib import Path
 
 from prefect import flow, task
+from prefect.logging import get_run_logger
 
 import pandas as pd
 
@@ -19,9 +25,11 @@ def read_from_silver_layer(object_name: str) -> pd.DataFrame:
     Returns:
         DataFrame with the data
     """
+    logger = get_run_logger()
     client = get_minio_client()
 
     if not client.bucket_exists(BUCKET_SILVER):
+        logger.error(f"Bucket {BUCKET_SILVER} does not exist")
         raise ValueError(f"Bucket {BUCKET_SILVER} does not exist")
 
     response = client.get_object(BUCKET_SILVER, object_name)
@@ -30,7 +38,7 @@ def read_from_silver_layer(object_name: str) -> pd.DataFrame:
     response.release_conn()
 
     df = pd.read_csv(BytesIO(data))
-    print(f"Read {object_name} from {BUCKET_SILVER} ({len(df)} rows)")
+    logger.info(f"Read {object_name} from {BUCKET_SILVER} ({len(df)} rows)")
     return df
 
 
@@ -46,7 +54,7 @@ def join_clients_and_achats(clients_df: pd.DataFrame, achats_df: pd.DataFrame) -
     Returns:
         Joined DataFrame (fact table)
     """
-    # Joindre les données sur id_client
+    logger = get_run_logger()
     fact_table = achats_df.merge(
         clients_df,
         on='id_client',
@@ -54,7 +62,7 @@ def join_clients_and_achats(clients_df: pd.DataFrame, achats_df: pd.DataFrame) -
         suffixes=('', '_client')
     )
     
-    print(f"Joined data: {len(fact_table)} rows (from {len(achats_df)} achats and {len(clients_df)} clients)")
+    logger.info(f"Joined data: {len(fact_table)} rows (from {len(achats_df)} achats and {len(clients_df)} clients)")
     return fact_table
 
 
@@ -69,12 +77,12 @@ def calculate_kpis(fact_table: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with KPIs
     """
+    logger = get_run_logger()
     kpis = {}
     
-    # Convertir les dates en datetime pour les calculs
     fact_table['date_achat'] = pd.to_datetime(fact_table['date_achat'])
     
-    # 1. CA total (Chiffre d'Affaires)
+    # 1. CA total
     kpis['ca_total'] = fact_table['montant'].sum()
     
     # 2. Nombre total d'achats
@@ -109,16 +117,16 @@ def calculate_kpis(fact_table: pd.DataFrame) -> pd.DataFrame:
     # Créer un DataFrame avec les KPIs
     kpis_df = pd.DataFrame([kpis])
     
-    print("\n" + "="*50)
-    print("KPIs CALCULÉS:")
-    print("="*50)
+    logger.info("="*50)
+    logger.info("KPIs CALCULÉS:")
+    logger.info("="*50)
     for key, value in kpis.items():
         if value is not None:
             if isinstance(value, float):
-                print(f"  • {key}: {value:,.2f}")
+                logger.info(f"  • {key}: {value:,.2f}")
             else:
-                print(f"  • {key}: {value:,}")
-    print("="*50)
+                logger.info(f"  • {key}: {value:,}")
+    logger.info("="*50)
     
     return kpis_df
 
@@ -135,19 +143,20 @@ def create_dimension_tables(clients_df: pd.DataFrame, fact_table: pd.DataFrame) 
     Returns:
         Dictionary with dimension tables
     """
+    logger = get_run_logger()
     dimensions = {}
     
     # Dimension Clients
     dim_clients = clients_df.copy()
     dimensions['dim_clients'] = dim_clients
-    print(f"✓ Dimension Clients créée: {len(dim_clients)} clients")
+    logger.info(f"✓ Dimension Clients créée: {len(dim_clients)} clients")
     
     # Dimension Produits
     dim_produits = fact_table[['produit']].drop_duplicates().reset_index(drop=True)
     dim_produits['id_produit'] = range(1, len(dim_produits) + 1)
     dim_produits = dim_produits[['id_produit', 'produit']]
     dimensions['dim_produits'] = dim_produits
-    print(f"✓ Dimension Produits créée: {len(dim_produits)} produits")
+    logger.info(f"✓ Dimension Produits créée: {len(dim_produits)} produits")
     
     # Dimension Dates (avec agrégations temporelles)
     fact_table['date_achat'] = pd.to_datetime(fact_table['date_achat'])
@@ -163,7 +172,7 @@ def create_dimension_tables(clients_df: pd.DataFrame, fact_table: pd.DataFrame) 
     dim_dates = dim_dates.sort_values('date').reset_index(drop=True)
     dim_dates['id_date'] = range(1, len(dim_dates) + 1)
     dimensions['dim_dates'] = dim_dates
-    print(f"✓ Dimension Dates créée: {len(dim_dates)} dates avec agrégations temporelles")
+    logger.info(f"✓ Dimension Dates créée: {len(dim_dates)} dates avec agrégations temporelles")
     
     return dimensions
 
@@ -179,6 +188,7 @@ def calculate_temporal_aggregations(fact_table: pd.DataFrame) -> dict:
     Returns:
         Dictionary with temporal aggregations
     """
+    logger = get_run_logger()
     fact_table['date_achat'] = pd.to_datetime(fact_table['date_achat'])
     
     aggregations = {}
@@ -190,7 +200,7 @@ def calculate_temporal_aggregations(fact_table: pd.DataFrame) -> dict:
     }).reset_index()
     agg_jour.columns = ['date', 'ca_total', 'panier_moyen', 'nb_achats', 'nb_clients']
     aggregations['agg_jour'] = agg_jour
-    print(f"✓ Agrégation par jour: {len(agg_jour)} jours")
+    logger.info(f"✓ Agrégation par jour: {len(agg_jour)} jours")
     
     # Agrégation par semaine
     fact_table['annee_semaine'] = fact_table['date_achat'].dt.to_period('W')
@@ -201,7 +211,7 @@ def calculate_temporal_aggregations(fact_table: pd.DataFrame) -> dict:
     agg_semaine.columns = ['semaine', 'ca_total', 'panier_moyen', 'nb_achats', 'nb_clients']
     agg_semaine['semaine'] = agg_semaine['semaine'].astype(str)
     aggregations['agg_semaine'] = agg_semaine
-    print(f"✓ Agrégation par semaine: {len(agg_semaine)} semaines")
+    logger.info(f"✓ Agrégation par semaine: {len(agg_semaine)} semaines")
     
     # Agrégation par mois
     fact_table['annee_mois'] = fact_table['date_achat'].dt.to_period('M')
@@ -212,7 +222,7 @@ def calculate_temporal_aggregations(fact_table: pd.DataFrame) -> dict:
     agg_mois.columns = ['mois', 'ca_total', 'panier_moyen', 'nb_achats', 'nb_clients']
     agg_mois['mois'] = agg_mois['mois'].astype(str)
     aggregations['agg_mois'] = agg_mois
-    print(f"✓ Agrégation par mois: {len(agg_mois)} mois")
+    logger.info(f"✓ Agrégation par mois: {len(agg_mois)} mois")
     
     return aggregations
 
@@ -228,6 +238,7 @@ def calculate_ca_by_country(fact_table: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with CA by country
     """
+    logger = get_run_logger()
     ca_par_pays = fact_table.groupby('pays').agg({
         'montant': ['sum', 'mean', 'count'],
         'id_client': 'nunique'
@@ -235,7 +246,7 @@ def calculate_ca_by_country(fact_table: pd.DataFrame) -> pd.DataFrame:
     ca_par_pays.columns = ['pays', 'ca_total', 'panier_moyen', 'nb_achats', 'nb_clients']
     ca_par_pays = ca_par_pays.sort_values('ca_total', ascending=False).reset_index(drop=True)
     
-    print(f"✓ CA par pays calculé: {len(ca_par_pays)} pays")
+    logger.info(f"✓ CA par pays calculé: {len(ca_par_pays)} pays")
     return ca_par_pays
 
 
@@ -251,6 +262,7 @@ def save_to_gold_layer(df: pd.DataFrame, object_name: str) -> str:
     Returns:
         Object name in gold layer
     """
+    logger = get_run_logger()
     client = get_minio_client()
 
     if not client.bucket_exists(BUCKET_GOLD):
@@ -267,7 +279,7 @@ def save_to_gold_layer(df: pd.DataFrame, object_name: str) -> str:
         gold_csv,
         length=gold_csv.getbuffer().nbytes
     )
-    print(f"Saved {object_name} to {BUCKET_GOLD} ({len(df)} rows)")
+    logger.info(f"Saved {object_name} to {BUCKET_GOLD} ({len(df)} rows)")
     return object_name
 
 
@@ -280,57 +292,45 @@ def gold_ingestion_flow() -> dict:
     Returns:
         Dictionary with all created file names
     """
-    # 1. Lire les données depuis silver
+    logger = get_run_logger()
     clients_df = read_from_silver_layer("clients.csv")
     achats_df = read_from_silver_layer("achats.csv")
 
-    # 2. Joindre les données pour créer la table de faits
     fact_table = join_clients_and_achats(clients_df, achats_df)
-    
-    # 3. Calculer les KPIs
+
     kpis_df = calculate_kpis(fact_table)
-    
-    # 4. Créer les tables de dimensions
+
     dimensions = create_dimension_tables(clients_df, fact_table)
-    
-    # 5. Calculer les agrégations temporelles
+
     temporal_aggs = calculate_temporal_aggregations(fact_table)
-    
-    # 6. Calculer le CA par pays
+
     ca_par_pays = calculate_ca_by_country(fact_table)
-    
-    # 7. Sauvegarder toutes les tables dans Gold
+
     saved_files = {}
-    
-    # Table de faits
+
     saved_files['fact_achats'] = save_to_gold_layer(fact_table, "fact_achats.csv")
-    
-    # KPIs
+
     saved_files['kpis'] = save_to_gold_layer(kpis_df, "kpis.csv")
-    
-    # Dimensions
+
     saved_files['dim_clients'] = save_to_gold_layer(dimensions['dim_clients'], "dim_clients.csv")
     saved_files['dim_produits'] = save_to_gold_layer(dimensions['dim_produits'], "dim_produits.csv")
     saved_files['dim_dates'] = save_to_gold_layer(dimensions['dim_dates'], "dim_dates.csv")
-    
-    # Agrégations temporelles
     saved_files['agg_jour'] = save_to_gold_layer(temporal_aggs['agg_jour'], "agg_jour.csv")
     saved_files['agg_semaine'] = save_to_gold_layer(temporal_aggs['agg_semaine'], "agg_semaine.csv")
     saved_files['agg_mois'] = save_to_gold_layer(temporal_aggs['agg_mois'], "agg_mois.csv")
-    
-    # CA par pays
+
     saved_files['ca_par_pays'] = save_to_gold_layer(ca_par_pays, "ca_par_pays.csv")
 
-    print("\n" + "="*50)
-    print("✓ GOLD AGGREGATION TERMINÉE AVEC SUCCÈS")
-    print("="*50)
-    print("  Tables créées:")
-    print(f"    • Table de faits: fact_achats.csv")
-    print(f"    • KPIs: kpis.csv")
-    print(f"    • Dimensions: dim_clients.csv, dim_produits.csv, dim_dates.csv")
-    print(f"    • Agrégations temporelles: agg_jour.csv, agg_semaine.csv, agg_mois.csv")
-    print(f"    • CA par pays: ca_par_pays.csv")
-    print("="*50 + "\n")
+    logger.info("="*50)
+    logger.info("✓ GOLD AGGREGATION TERMINÉE AVEC SUCCÈS")
+    logger.info("="*50)
+    logger.info("  Tables créées:")
+    logger.info(f"    • Table de faits: fact_achats.csv")
+    logger.info(f"    • KPIs: kpis.csv")
+    logger.info(f"    • Dimensions: dim_clients.csv, dim_produits.csv, dim_dates.csv")
+    logger.info(f"    • Agrégations temporelles: agg_jour.csv, agg_semaine.csv, agg_mois.csv")
+    logger.info(f"    • CA par pays: ca_par_pays.csv")
+    logger.info("="*50)
 
     return saved_files
 
