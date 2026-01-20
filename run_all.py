@@ -18,15 +18,14 @@ def main():
         print("PIPELINE ELT TERMINÉ AVEC SUCCÈS")
         print("="*60)
         print(f"Résultats : {result}")
-        print("="*60)
-        
-        print("\n" + "="*60)
-        print("DASHBOARD")
+        if isinstance(result, dict) and "mongodb" in result:
+            ok = [v for v in result["mongodb"].values() if not str(v).startswith("ERROR")]
+            print(f"MongoDB : {len(ok)} collections créées")
         print("="*60)
         response = input("\n Voulez-vous lancer le dashboard pour visualiser les données ? (o/n): ")
         
         if response.lower() in ['o', 'oui', 'y', 'yes', '']:
-            print("\n📊 Lancement du dashboard Streamlit...")
+            print("\nLancement du dashboard Streamlit...")
             print("   Le dashboard s'ouvrira dans votre navigateur.")
             print("   Appuyez sur Ctrl+C pour arrêter le dashboard.\n")
             print("="*60 + "\n")
