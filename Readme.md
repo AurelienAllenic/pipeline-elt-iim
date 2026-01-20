@@ -55,6 +55,7 @@ MINIO_SECURE=False
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 MONGODB_DATABASE=analytics
 MONGODB_COLLECTION_PREFIX=gold_
+API_URL=http://localhost:8000
 ```
 
 ## Génération des données
@@ -76,8 +77,9 @@ python run_all.py
 ```
 
 Cette commande :
-1. Exécute le pipeline complet (Bronze → Silver → Gold -> MongoDB)
-2. Propose de lancer le dashboard automatiquement
+1. Exécute le pipeline complet (Bronze → Silver → Gold → MongoDB)
+2. Propose de lancer l'API FastAPI (optionnel)
+3. Propose de lancer le dashboard automatiquement (nécessite l'API)
 
 ### Option 2 : Lancer uniquement l'orchestrateur
 
@@ -109,7 +111,21 @@ python flows/gold_agregation.py
 python flows/gold_to_mongodb.py
 ```
 
-### Option 4 : Lancer uniquement le dashboard
+### Option 4 : Lancer l'API FastAPI
+
+```bash
+python api.py
+```
+
+Ou avec uvicorn directement :
+
+```bash
+uvicorn api:app --reload --port 8000
+```
+
+L'API expose les données MongoDB via des endpoints REST. Elle doit être lancée avant le dashboard.
+
+### Option 5 : Lancer uniquement le dashboard
 
 ```bash
 streamlit run dashboard.py
@@ -126,9 +142,14 @@ streamlit run dashboard.py
 - Identifiants : minioadmin / minioadmin
 - Description : Interface pour gérer les buckets et visualiser les fichiers stockés
 
+### API FastAPI
+- URL : http://localhost:8000
+- Documentation interactive : http://localhost:8000/docs
+- Description : API REST qui expose les données MongoDB. Le dashboard Streamlit interroge cette API pour afficher les données.
+
 ### Dashboard Streamlit
 - URL : http://localhost:8501
-- Description : Dashboard interactif pour visualiser les données de la couche Gold
+- Description : Dashboard interactif pour visualiser les données. Interroge l'API FastAPI pour récupérer les données depuis MongoDB.
 
 ## Structure du pipeline
 
@@ -152,6 +173,12 @@ streamlit run dashboard.py
 - Destination : MongoDB Atlas (ou MongoDB local)
 - Actions : Lecture des fichiers CSV/Parquet depuis Gold, écriture dans les collections MongoDB
 - Collections créées : `gold_fact_achats`, `gold_kpis`, `gold_dim_clients`, `gold_dim_produits`, `gold_dim_dates`, `gold_agg_jour`, `gold_agg_semaine`, `gold_agg_mois`, `gold_ca_par_pays`
+
+### API FastAPI
+- Source : MongoDB (collections créées par l'export)
+- Destination : Endpoints REST accessibles via HTTP
+- Actions : Expose les données MongoDB via une API REST. Le dashboard Streamlit interroge cette API pour récupérer et afficher les données.
+- Endpoints disponibles : `/kpis`, `/fact_achats`, `/dim_clients`, `/dim_produits`, `/dim_dates`, `/agg_jour`, `/agg_semaine`, `/agg_mois`, `/ca_par_pays`
 
 ## Fichiers générés dans Gold
 

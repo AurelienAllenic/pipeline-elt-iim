@@ -2,8 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from io import BytesIO
-from flows.config import BUCKET_GOLD, get_minio_client
+import httpx
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 st.set_page_config(
     page_title="Dashboard ELT Pipeline",
@@ -13,24 +17,22 @@ st.set_page_config(
 )
 
 @st.cache_data(ttl=300)
-def load_data_from_minio(object_name: str) -> pd.DataFrame:
-    """Charge un fichier CSV depuis le bucket Gold de MinIO"""
+def load_data_from_api(endpoint: str) -> pd.DataFrame:
+    """Charge des données depuis l'API"""
     try:
-        client = get_minio_client()
-        
-        if not client.bucket_exists(BUCKET_GOLD):
-            st.error(f"Le bucket {BUCKET_GOLD} n'existe pas")
+        with httpx.Client() as client:
+            response = client.get(f"{API_URL}{endpoint}", timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+            if "data" in data:
+                df = pd.DataFrame(data["data"])
+                return df
             return pd.DataFrame()
-        
-        response = client.get_object(BUCKET_GOLD, object_name)
-        data = response.read()
-        response.close()
-        response.release_conn()
-        
-        df = pd.read_csv(BytesIO(data))
-        return df
+    except httpx.RequestError as e:
+        st.error(f"Erreur de connexion à l'API {endpoint}: {e}")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Erreur lors du chargement de {object_name}: {e}")
+        st.error(f"Erreur lors du chargement de {endpoint}: {e}")
         return pd.DataFrame()
 
 
@@ -38,14 +40,14 @@ def main():
     st.title("📊 Dashboard ELT Pipeline")
     st.markdown("---")
 
-    with st.spinner("Chargement des données depuis MinIO..."):
-        kpis_df = load_data_from_minio("kpis.csv")
-        fact_df = load_data_from_minio("fact_achats.csv")
-        agg_jour_df = load_data_from_minio("agg_jour.csv")
-        agg_semaine_df = load_data_from_minio("agg_semaine.csv")
-        agg_mois_df = load_data_from_minio("agg_mois.csv")
-        ca_par_pays_df = load_data_from_minio("ca_par_pays.csv")
-        dim_produits_df = load_data_from_minio("dim_produits.csv")
+    with st.spinner("Chargement des données depuis l'API..."):
+        kpis_df = load_data_from_api("/kpis")
+        fact_df = load_data_from_api("/fact_achats")
+        agg_jour_df = load_data_from_api("/agg_jour")
+        agg_semaine_df = load_data_from_api("/agg_semaine")
+        agg_mois_df = load_data_from_api("/agg_mois")
+        ca_par_pays_df = load_data_from_api("/ca_par_pays")
+        dim_produits_df = load_data_from_api("/dim_produits")
 
     if kpis_df.empty:
         st.warning("⚠️ Aucune donnée disponible. Veuillez exécuter le pipeline ELT d'abord.")

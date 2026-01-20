@@ -8,3 +8,6 @@ plotly
 python-dotenv
 numpy
 pymongo
+fastapi
+uvicorn
+httpx
