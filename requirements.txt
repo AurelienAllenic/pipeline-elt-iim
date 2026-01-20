@@ -7,3 +7,4 @@ streamlit
 plotly
 python-dotenv
 numpy
+pymongo
