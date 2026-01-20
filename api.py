@@ -55,7 +55,8 @@ def root():
             "/agg_jour",
             "/agg_semaine",
             "/agg_mois",
-            "/ca_par_pays"
+            "/ca_par_pays",
+            "/refresh_time/{collection_name}"
         ]
     }
 
@@ -146,6 +147,62 @@ def get_ca_par_pays():
         collection = get_collection("ca_par_pays")
         data = list(collection.find({}, {"_id": 0}))
         return {"data": data, "count": len(data)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/refresh_time/{collection_name}")
+def get_refresh_time(collection_name: str):
+    """Calcule le temps de refresh pour une collection"""
+    import time
+    from datetime import datetime
+    
+    start_time = time.time()
+    timestamp_read_start = datetime.now().isoformat()
+    
+    try:
+        collection = get_collection(collection_name)
+        # Faire une lecture test
+        count = collection.count_documents({})
+        
+        end_time = time.time()
+        timestamp_read_end = datetime.now().isoformat()
+        read_duration = end_time - start_time
+        
+        # Récupérer les métadonnées d'écriture
+        client = get_mongodb_client()
+        db = client[MONGODB_DATABASE]
+        metadata_collection = db["_refresh_metadata"]
+        
+        # Le nom de collection dans les métadonnées inclut déjà le préfixe
+        full_collection_name = f"{MONGODB_COLLECTION_PREFIX}{collection_name}"
+        last_write = metadata_collection.find_one(
+            {"collection": full_collection_name},
+            sort=[("write_end", -1)]
+        )
+        
+        if last_write:
+            write_end = datetime.fromisoformat(last_write["write_end"])
+            read_start = datetime.fromisoformat(timestamp_read_start)
+            refresh_time = (read_start - write_end).total_seconds()
+            
+            return {
+                "collection": collection_name,
+                "full_collection_name": full_collection_name,
+                "write_timestamp": last_write["write_end"],
+                "read_timestamp": timestamp_read_start,
+                "refresh_time_seconds": refresh_time,
+                "read_duration_seconds": read_duration,
+                "write_duration_seconds": last_write.get("duration_seconds", 0),
+                "record_count": count
+            }
+        else:
+            return {
+                "collection": collection_name,
+                "full_collection_name": full_collection_name,
+                "error": "No write metadata found",
+                "read_duration_seconds": read_duration,
+                "record_count": count
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
