@@ -178,15 +178,18 @@ streamlit run dashboard.py
 
 Le dashboard "Dashboard ELT Pipeline" contient les visualisations suivantes :
 
-**Partie 1** (voir `assets/dashboard-partie-1.png`) :
+**Partie 1** :
+![Dashboard Metabase - Partie 1](assets/dashboard-partie-1.png)
 - KPIs Principaux : CA Total, Nombre d'achats, Panier moyen, Croissance mensuelle, Clients uniques, Montant moyen par client, Montant médian
 - Évolution temporelle du CA et du nombre d'achats
 
-**Partie 2** (voir `assets/dashboard-partie-2.png`) :
+**Partie 2** :
+![Dashboard Metabase - Partie 2](assets/dashboard-partie-2.png)
 - Analyses par produit : CA par produit, répartition du CA par produit
 - Analyses par pays : CA par pays, répartition du CA par pays
 
-**Partie 3** (voir `assets/dashboard-partie-3.png`) :
+**Partie 3** :
+![Dashboard Metabase - Partie 3](assets/dashboard-partie-3.png)
 - Agrégations temporelles supplémentaires : CA et nombre d'achats par semaine et par mois
 
 ## Structure du pipeline
