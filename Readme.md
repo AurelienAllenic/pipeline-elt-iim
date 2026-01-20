@@ -52,6 +52,9 @@ MINIO_ENDPOINT=localhost:9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_SECURE=False
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE=analytics
+MONGODB_COLLECTION_PREFIX=gold_
 ```
 
 ## Génération des données
@@ -73,7 +76,7 @@ python run_all.py
 ```
 
 Cette commande :
-1. Exécute le pipeline complet (Bronze → Silver → Gold)
+1. Exécute le pipeline complet (Bronze → Silver → Gold -> MongoDB)
 2. Propose de lancer le dashboard automatiquement
 
 ### Option 2 : Lancer uniquement l'orchestrateur
@@ -82,7 +85,7 @@ Cette commande :
 python flows/orchestrate_pipeline.py
 ```
 
-Exécute les trois couches dans l'ordre : Bronze → Silver → Gold
+Exécute les trois couches dans l'ordre + la base : Bronze → Silver → Gold -> MongoDB
 
 ### Option 3 : Lancer les couches séparément
 
@@ -99,6 +102,11 @@ python flows/silver_transformation.py
 **Couche Gold :**
 ```bash
 python flows/gold_agregation.py
+```
+
+**MongoDB :**
+```bash
+python flows/gold_to_mongodb.py
 ```
 
 ### Option 4 : Lancer uniquement le dashboard
@@ -139,6 +147,12 @@ streamlit run dashboard.py
 - Destination : Bucket MinIO `gold`
 - Actions : Calcul des KPIs, création des tables de dimensions, agrégations temporelles, CA par pays
 
+### Export MongoDB
+- Source : Bucket MinIO `gold`
+- Destination : MongoDB Atlas (ou MongoDB local)
+- Actions : Lecture des fichiers CSV/Parquet depuis Gold, écriture dans les collections MongoDB
+- Collections créées : `gold_fact_achats`, `gold_kpis`, `gold_dim_clients`, `gold_dim_produits`, `gold_dim_dates`, `gold_agg_jour`, `gold_agg_semaine`, `gold_agg_mois`, `gold_ca_par_pays`
+
 ## Fichiers générés dans Gold
 
 - `fact_achats.csv` : Table de faits (achats + clients)
@@ -150,6 +164,18 @@ streamlit run dashboard.py
 - `agg_semaine.csv` : Agrégations par semaine
 - `agg_mois.csv` : Agrégations par mois
 - `ca_par_pays.csv` : Chiffre d'affaires par pays
+
+## Collections MongoDB créées
+
+- `gold_fact_achats` : Table de faits (achats + clients)
+- `gold_kpis` : Indicateurs clés de performance
+- `gold_dim_clients` : Dimension clients
+- `gold_dim_produits` : Dimension produits
+- `gold_dim_dates` : Dimension dates
+- `gold_agg_jour` : Agrégations par jour
+- `gold_agg_semaine` : Agrégations par semaine
+- `gold_agg_mois` : Agrégations par mois
+- `gold_ca_par_pays` : Chiffre d'affaires par pays
 
 ## Arrêter les services Docker
 
