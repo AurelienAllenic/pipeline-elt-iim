@@ -40,23 +40,26 @@ def main():
     st.title("📊 Dashboard ELT Pipeline")
     st.markdown("---")
 
-    with st.spinner("Chargement des données depuis l'API..."):
-        kpis_df = load_data_from_api("/kpis")
-        fact_df = load_data_from_api("/fact_achats")
-        agg_jour_df = load_data_from_api("/agg_jour")
-        agg_semaine_df = load_data_from_api("/agg_semaine")
-        agg_mois_df = load_data_from_api("/agg_mois")
-        ca_par_pays_df = load_data_from_api("/ca_par_pays")
-        dim_produits_df = load_data_from_api("/dim_produits")
-
-    if kpis_df.empty:
-        st.warning("⚠️ Aucune donnée disponible. Veuillez exécuter le pipeline ELT d'abord.")
-        return
+    # Initialiser les DataFrames vides
+    kpis_df = pd.DataFrame()
+    fact_df = pd.DataFrame()
+    agg_jour_df = pd.DataFrame()
+    agg_semaine_df = pd.DataFrame()
+    agg_mois_df = pd.DataFrame()
+    ca_par_pays_df = pd.DataFrame()
+    dim_produits_df = pd.DataFrame()
     
     # ========== SECTION 1: KPIs PRINCIPAUX ==========
     st.header("📈 Indicateurs Clés de Performance (KPIs)")
     
-    if not kpis_df.empty:
+    # Charger les KPIs si pas encore chargés
+    if kpis_df.empty:
+        with st.spinner("Chargement des KPIs..."):
+            kpis_df = load_data_from_api("/kpis")
+    
+    if kpis_df.empty:
+        st.warning("Aucune donnée KPI disponible. Veuillez exécuter le pipeline ELT d'abord.")
+    elif not kpis_df.empty:
         kpi = kpis_df.iloc[0]
         
         col1, col2, col3, col4 = st.columns(4)
@@ -117,6 +120,22 @@ def main():
         ["Par jour", "Par semaine", "Par mois"],
         key="granularite"
     )
+    
+    # Charger les données d'agrégation selon la granularité choisie
+    if granularite == "Par jour":
+        if agg_jour_df.empty:
+            with st.spinner("Chargement des agrégations par jour..."):
+                agg_jour_df = load_data_from_api("/agg_jour")
+    
+    if granularite == "Par semaine":
+        if agg_semaine_df.empty:
+            with st.spinner("Chargement des agrégations par semaine..."):
+                agg_semaine_df = load_data_from_api("/agg_semaine")
+    
+    if granularite == "Par mois":
+        if agg_mois_df.empty:
+            with st.spinner("Chargement des agrégations par mois..."):
+                agg_mois_df = load_data_from_api("/agg_mois")
     
     if granularite == "Par jour" and not agg_jour_df.empty:
         agg_jour_df['date'] = pd.to_datetime(agg_jour_df['date'])
@@ -196,6 +215,11 @@ def main():
     # ========== SECTION 3: ANALYSE PAR PRODUIT ==========
     st.header("🛍️ Analyse par Produit")
     
+    # Charger les données fact si pas encore chargées
+    if fact_df.empty:
+        with st.spinner("Chargement des données d'achats..."):
+            fact_df = load_data_from_api("/fact_achats")
+    
     if not fact_df.empty:
         # CA par produit
         ca_produit = fact_df.groupby('produit')['montant'].agg(['sum', 'count', 'mean']).reset_index()
@@ -234,6 +258,11 @@ def main():
     
     # ========== SECTION 4: ANALYSE PAR PAYS ==========
     st.header("🌍 Analyse par Pays")
+    
+    # Charger les données CA par pays si pas encore chargées
+    if ca_par_pays_df.empty:
+        with st.spinner("Chargement des données par pays..."):
+            ca_par_pays_df = load_data_from_api("/ca_par_pays")
     
     if not ca_par_pays_df.empty:
         ca_par_pays_df = ca_par_pays_df.sort_values('ca_total', ascending=False)
@@ -281,6 +310,7 @@ def main():
     # ========== SECTION 5: DISTRIBUTION DES MONTANTS ==========
     st.header("📊 Distribution des Montants")
     
+    # Les données fact sont déjà chargées dans la section 3, pas besoin de recharger
     if not fact_df.empty:
         col1, col2 = st.columns(2)
         
@@ -312,22 +342,53 @@ def main():
         tab1, tab2, tab3, tab4 = st.tabs(["KPIs", "Fact Table", "Agrégations", "CA par Pays"])
         
         with tab1:
-            st.dataframe(kpis_df, use_container_width=True)
+            if not kpis_df.empty:
+                st.dataframe(kpis_df, use_container_width=True)
+            else:
+                st.info("Chargement des KPIs...")
         
         with tab2:
-            st.dataframe(fact_df.head(100), use_container_width=True)
-            st.caption(f"Affichage de 100 lignes sur {len(fact_df)} au total")
+            if not fact_df.empty:
+                st.dataframe(fact_df.head(100), use_container_width=True)
+                st.caption(f"Affichage de 100 lignes sur {len(fact_df)} au total")
+            else:
+                st.info("Chargement des données d'achats...")
         
         with tab3:
+            # Charger toutes les agrégations si nécessaire
+            if agg_jour_df.empty:
+                with st.spinner("Chargement des agrégations par jour..."):
+                    agg_jour_df = load_data_from_api("/agg_jour")
+            if agg_semaine_df.empty:
+                with st.spinner("Chargement des agrégations par semaine..."):
+                    agg_semaine_df = load_data_from_api("/agg_semaine")
+            if agg_mois_df.empty:
+                with st.spinner("Chargement des agrégations par mois..."):
+                    agg_mois_df = load_data_from_api("/agg_mois")
+            
             st.subheader("Par jour")
-            st.dataframe(agg_jour_df, use_container_width=True)
+            if not agg_jour_df.empty:
+                st.dataframe(agg_jour_df, use_container_width=True)
+            else:
+                st.info("Aucune donnée disponible")
+            
             st.subheader("Par semaine")
-            st.dataframe(agg_semaine_df, use_container_width=True)
+            if not agg_semaine_df.empty:
+                st.dataframe(agg_semaine_df, use_container_width=True)
+            else:
+                st.info("Aucune donnée disponible")
+            
             st.subheader("Par mois")
-            st.dataframe(agg_mois_df, use_container_width=True)
+            if not agg_mois_df.empty:
+                st.dataframe(agg_mois_df, use_container_width=True)
+            else:
+                st.info("Aucune donnée disponible")
         
         with tab4:
-            st.dataframe(ca_par_pays_df, use_container_width=True)
+            if not ca_par_pays_df.empty:
+                st.dataframe(ca_par_pays_df, use_container_width=True)
+            else:
+                st.info("Chargement des données par pays...")
 
 
 if __name__ == "__main__":
