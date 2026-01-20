@@ -2,3 +2,4 @@
 /__pycache__/
 .env
 flows/__pycache__/
+**/__pycache__/
