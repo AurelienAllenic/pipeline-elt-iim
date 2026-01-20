@@ -8,6 +8,8 @@ from prefect import flow, task
 from prefect.logging import get_run_logger
 import pandas as pd
 from pymongo import MongoClient
+import time
+from datetime import datetime
 
 try:
     from .config import BUCKET_GOLD, get_minio_client, MONGODB_URI, MONGODB_DATABASE, MONGODB_COLLECTION_PREFIX
@@ -41,11 +43,15 @@ def read_parquet_from_gold(object_name: str) -> pd.DataFrame:
 
 @task(name="write_to_mongodb", retries=2)
 def write_to_mongodb(df: pd.DataFrame, collection_name: str) -> str:
-    """Écrit un DataFrame dans MongoDB"""
+    """Écrit un DataFrame dans MongoDB et enregistre les métadonnées de timing"""
     logger = get_run_logger()
     
     if not MONGODB_URI:
         raise ValueError("MONGODB_URI must be set in .env")
+    
+    # Mesurer le temps d'écriture
+    start_time = time.time()
+    timestamp_write_start = datetime.now().isoformat()
     
     client = MongoClient(MONGODB_URI)
     db = client[MONGODB_DATABASE]
@@ -57,7 +63,30 @@ def write_to_mongodb(df: pd.DataFrame, collection_name: str) -> str:
     if records:
         collection.insert_many(records)
 
+    end_time = time.time()
+    timestamp_write_end = datetime.now().isoformat()
+    duration = end_time - start_time
+
     logger.info(f"Wrote {len(records)} documents to MongoDB collection '{collection_name}'")
+    logger.info(f"Timestamp écriture début: {timestamp_write_start}")
+    logger.info(f"Timestamp écriture fin: {timestamp_write_end}")
+    logger.info(f"Durée écriture: {duration:.3f} secondes")
+    
+    # Sauvegarder les métadonnées de refresh dans une collection spéciale
+    try:
+        metadata_collection = db["_refresh_metadata"]
+        metadata_collection.insert_one({
+            "collection": collection_name,
+            "write_start": timestamp_write_start,
+            "write_end": timestamp_write_end,
+            "duration_seconds": duration,
+            "record_count": len(records),
+            "timestamp": datetime.now().isoformat()
+        })
+        logger.info(f"Métadonnées de refresh enregistrées pour '{collection_name}'")
+    except Exception as e:
+        logger.warning(f"Impossible d'enregistrer les métadonnées de refresh: {e}")
+    
     client.close()
 
     return collection_name

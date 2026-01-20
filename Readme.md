@@ -79,7 +79,8 @@ python run_all.py
 Cette commande :
 1. Exécute le pipeline complet (Bronze → Silver → Gold → MongoDB)
 2. Propose de lancer l'API FastAPI (optionnel)
-3. Propose de lancer le dashboard automatiquement (nécessite l'API)
+3. Si l'API est lancée, calcule automatiquement le temps de refresh entre l'écriture dans MongoDB et la disponibilité via l'API
+4. Propose de lancer le dashboard automatiquement (nécessite l'API)
 
 ### Option 2 : Lancer uniquement l'orchestrateur
 
@@ -146,6 +147,7 @@ streamlit run dashboard.py
 - URL : http://localhost:8000
 - Documentation interactive : http://localhost:8000/docs
 - Description : API REST qui expose les données MongoDB. Le dashboard Streamlit interroge cette API pour afficher les données.
+- Endpoints disponibles : `/kpis`, `/fact_achats`, `/dim_clients`, `/dim_produits`, `/dim_dates`, `/agg_jour`, `/agg_semaine`, `/agg_mois`, `/ca_par_pays`, `/refresh_time/{collection_name}`
 
 ### Dashboard Streamlit
 - URL : http://localhost:8501
@@ -178,7 +180,20 @@ streamlit run dashboard.py
 - Source : MongoDB (collections créées par l'export)
 - Destination : Endpoints REST accessibles via HTTP
 - Actions : Expose les données MongoDB via une API REST. Le dashboard Streamlit interroge cette API pour récupérer et afficher les données.
-- Endpoints disponibles : `/kpis`, `/fact_achats`, `/dim_clients`, `/dim_produits`, `/dim_dates`, `/agg_jour`, `/agg_semaine`, `/agg_mois`, `/ca_par_pays`
+- Endpoints disponibles : `/kpis`, `/fact_achats`, `/dim_clients`, `/dim_produits`, `/dim_dates`, `/agg_jour`, `/agg_semaine`, `/agg_mois`, `/ca_par_pays`, `/refresh_time/{collection_name}`
+
+### Calcul du temps de refresh
+- **Quand** : Automatiquement après le lancement de l'API via `run_all.py`
+- **Objectif** : Mesurer le temps entre l'écriture des données dans MongoDB et leur disponibilité via l'API FastAPI
+- **Méthode** : 
+  - Les timestamps d'écriture sont enregistrés dans MongoDB lors de l'export (collection `_refresh_metadata`)
+  - L'endpoint `/refresh_time/{collection_name}` calcule la différence entre le timestamp d'écriture et le timestamp de lecture
+  - Le script `test_refresh_time.py` teste plusieurs collections et calcule les statistiques (moyen, minimum, maximum)
+- **Utilisation manuelle** : 
+  ```bash
+  python test_refresh_time.py
+  ```
+  (nécessite que l'API soit lancée)
 
 ## Fichiers générés dans Gold
 
