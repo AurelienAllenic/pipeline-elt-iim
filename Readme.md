@@ -41,6 +41,8 @@ Cela démarre :
 - MinIO (stockage objet)
 - PostgreSQL (base de données Prefect)
 - Prefect Server (orchestration)
+- Metabase (Business Intelligence)
+- PostgreSQL pour Metabase (métadonnées)
 
 ### 5. Configuration
 
@@ -152,6 +154,43 @@ streamlit run dashboard.py
 ### Dashboard Streamlit
 - URL : http://localhost:8501
 - Description : Dashboard interactif pour visualiser les données. Interroge l'API FastAPI pour récupérer les données depuis MongoDB.
+
+### Metabase
+- URL : http://localhost:3000
+- Description : Outil de Business Intelligence pour créer des dashboards et des requêtes sur les données MongoDB
+- Configuration :
+  1. Au premier lancement, créez un compte administrateur
+  2. Ajoutez une base de données MongoDB :
+     - Aller dans "Admin" > "Databases" > "Add database"
+     - Sélectionner "MongoDB"
+     - Utiliser votre `MONGODB_URI` du fichier `.env` comme **Connection String**
+     - Ou remplir manuellement :
+       - **Host** : Votre cluster MongoDB (ex: cluster.mongodb.net)
+       - **Port** : 27017 (ou laissez vide pour MongoDB Atlas)
+       - **Database name** : `analytics`
+       - **User** : Votre username MongoDB
+       - **Password** : Votre password MongoDB
+  3. Les collections MongoDB apparaîtront comme des tables :
+     - `gold_fact_achats`, `gold_kpis`, `gold_dim_clients`, `gold_dim_produits`, `gold_dim_dates`, `gold_agg_jour`, `gold_agg_semaine`, `gold_agg_mois`, `gold_ca_par_pays`
+  4. Créez des questions (requêtes) et regroupez-les dans des dashboards
+
+#### Contenu du Dashboard Metabase
+
+Le dashboard "Dashboard ELT Pipeline" contient les visualisations suivantes :
+
+**Partie 1** :
+![Dashboard Metabase - Partie 1](assets/dashboard-partie-1.png)
+- KPIs Principaux : CA Total, Nombre d'achats, Panier moyen, Croissance mensuelle, Clients uniques, Montant moyen par client, Montant médian
+- Évolution temporelle du CA et du nombre d'achats
+
+**Partie 2** :
+![Dashboard Metabase - Partie 2](assets/dashboard-partie-2.png)
+- Analyses par produit : CA par produit, répartition du CA par produit
+- Analyses par pays : CA par pays, répartition du CA par pays
+
+**Partie 3** :
+![Dashboard Metabase - Partie 3](assets/dashboard-partie-3.png)
+- Agrégations temporelles supplémentaires : CA et nombre d'achats par semaine et par mois
 
 ## Structure du pipeline
 
