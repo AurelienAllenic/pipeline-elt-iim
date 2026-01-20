@@ -18,17 +18,19 @@ try:
     from flows.bronze_ingestion import bronze_ingestion_flow
     from flows.silver_transformation import silver_ingestion_flow
     from flows.gold_agregation import gold_ingestion_flow
+    from flows.gold_to_mongodb import gold_to_mongodb_flow
 except ImportError:
     from .bronze_ingestion import bronze_ingestion_flow
     from .silver_transformation import silver_ingestion_flow
     from .gold_agregation import gold_ingestion_flow
+    from .gold_to_mongodb import gold_to_mongodb_flow
 
 
 @flow(name="ELT Pipeline Orchestrator", log_prints=True)
 def elt_pipeline_orchestrator(data_dir: str = "./data/sources") -> dict:
     """
     Orchestrateur principal du pipeline ELT.
-    Exécute les trois couches dans l'ordre : Bronze → Silver → Gold.
+    Exécute les trois couches dans l'ordre : Bronze → Silver → Gold -> MongoDB.
 
     Args:
         data_dir: Répertoire contenant les fichiers sources CSV
@@ -79,6 +81,18 @@ def elt_pipeline_orchestrator(data_dir: str = "./data/sources") -> dict:
     except Exception as e:
         logger.error(f"Erreur dans la couche Gold : {e}")
         raise
+
+    # 4. Export Gold -> MongoDB
+    logger.info("\n" + "="*60)
+    logger.info("EXPORT MONGODB - Écriture des tables Gold")
+    logger.info("="*60)
+    try:
+        mongo_result = gold_to_mongodb_flow()
+        results["mongodb"] = mongo_result
+        logger.info(f"MongoDB terminé : {mongo_result}")
+    except Exception as e:
+        logger.error(f"Erreur dans l'export MongoDB : {e}")
+        raise
     
     # Résumé
     logger.info("\n" + "="*60)
@@ -88,6 +102,7 @@ def elt_pipeline_orchestrator(data_dir: str = "./data/sources") -> dict:
     logger.info(f"  Bronze : {results.get('bronze', 'N/A')}")
     logger.info(f"  Silver : {results.get('silver', 'N/A')}")
     logger.info(f"  Gold   : {len(results.get('gold', {}))} tables créées")
+    logger.info(f"  MongoDB: {len([r for r in results.get('mongodb', {}).values() if not str(r).startswith('ERROR')])} collections créées")
     logger.info("="*60)
     
     return results
